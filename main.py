@@ -4,14 +4,19 @@ from PyQt6.QtWidgets import QApplication, QLabel, QWidget, QGridLayout, \
     QVBoxLayout, QComboBox, QToolBar, QStatusBar, QMessageBox
 from PyQt6.QtGui import QAction, QIcon
 import sqlite3
+import mysql.connector
 
 
 class DbConnection:
-    def __init__(self, database_file="database.db"):
-        self.database_file = database_file
+    def __init__(self, host="localhost", user="root", password="6Fju8_9gXc", database="books"):
+        self.host = host
+        self.user = user
+        self.password = password
+        self.database = database
 
     def connect(self):
-        connection = sqlite3.connect(self.database_file)
+        connection = mysql.connector.connect(host=self.host, user=self.user,
+                                             password=self.password, database=self.database)
         return connection
 
 
@@ -81,8 +86,9 @@ class MainWindow(QMainWindow):
 
     def load_data(self):
         connection = DbConnection().connect()
-        result = connection.execute("SELECT * FROM students;")
-        self.dataset = list(result)  # Store the original data
+        cursor = connection.cursor()
+        cursor.execute("SELECT * FROM students")
+        self.dataset = cursor.fetchall()
 
         self.table.setRowCount(0)  # Reset row count to avoid duplication
         for row_number, row_data in enumerate(self.dataset):
@@ -152,7 +158,7 @@ class InsertDialog(QDialog):
         connection = DbConnection().connect()
         cursor = connection.cursor()
         cursor.execute(
-            "INSERT INTO students (name, course, mobile) VALUES (?, ?, ?)",
+            "INSERT INTO students (name, course, mobile) VALUES (%s, %s, %s)",
             (name, course, mobile)
         )
         connection.commit()
@@ -181,14 +187,15 @@ class SearchDialog(QDialog):
         self.setLayout(layout)
 
     def search(self):
-        name = self.student_name.text()
+        query_name = self.student_name.text()
+        print(query_name)
         connection = DbConnection().connect()
         cursor = connection.cursor()
-        result = cursor.execute("SELECT * FROM students WHERE name LIKE ?;",
-                                ('%' + name + '%',))
-        rows = result.fetchall()
+        cursor.execute("SELECT * FROM students WHERE name LIKE %s", ('%' + query_name + '%',))
+        result = cursor.fetchall()
+        rows = list(result)
 
-        mgmt_dashboard.table.setRowCount(0)  # Clear the table
+        mgmt_dashboard.table.setRowCount(0)
         for row_number, row_data in enumerate(rows):
             mgmt_dashboard.table.insertRow(row_number)
             for column_number, data in enumerate(row_data):
@@ -237,7 +244,7 @@ class EditDialog(QDialog):
     def update_student(self):
         connection = DbConnection().connect()
         cursor = connection.cursor()
-        cursor.execute("UPDATE students SET name = ?, course = ?, mobile = ? WHERE id = ?;",
+        cursor.execute("UPDATE students SET name = %s, course = %s, mobile = %s WHERE id = %s;",
                        (self.student_name.text(),
                         self.course_name.currentText(),
                         self.mobile.text(),
@@ -272,7 +279,7 @@ class DeleteDialog(QDialog):
         student_id = mgmt_dashboard.table.item(index, 0).text()
         connection = DbConnection().connect()
         cursor = connection.cursor()
-        cursor.execute("DELETE from students WHERE id = ?", (student_id,))
+        cursor.execute("DELETE from students WHERE id = %s", (student_id,))
         connection.commit()
         cursor.close()
         connection.close()
