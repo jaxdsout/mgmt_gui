@@ -3,8 +3,16 @@ from PyQt6.QtWidgets import QApplication, QLabel, QWidget, QGridLayout, \
     QLineEdit, QPushButton, QMainWindow, QTableWidget, QTableWidgetItem, QDialog, \
     QVBoxLayout, QComboBox, QToolBar, QStatusBar, QMessageBox
 from PyQt6.QtGui import QAction, QIcon
-from PyQt6.QtCore import Qt
 import sqlite3
+
+
+class DbConnection:
+    def __init__(self, database_file="database.db"):
+        self.database_file = database_file
+
+    def connect(self):
+        connection = sqlite3.connect(self.database_file)
+        return connection
 
 
 class MainWindow(QMainWindow):
@@ -72,7 +80,7 @@ class MainWindow(QMainWindow):
         self.statusbar.addWidget(delete_button)
 
     def load_data(self):
-        connection = sqlite3.connect("database.db")
+        connection = DbConnection().connect()
         result = connection.execute("SELECT * FROM students;")
         self.dataset = list(result)  # Store the original data
 
@@ -107,6 +115,87 @@ class MainWindow(QMainWindow):
     def about(self):
         dialog = AboutDialog()
         dialog.exec()
+
+
+class InsertDialog(QDialog):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Insert Student Data")
+        self.setFixedWidth(300)
+        self.setFixedHeight(300)
+
+        layout = QVBoxLayout()
+
+        self.student_name = QLineEdit()
+        self.student_name.setPlaceholderText("Name")
+        layout.addWidget(self.student_name)
+
+        self.course_name = QComboBox()
+        courses = ["Biology", "Math", "Astronomy", "Physics"]
+        self.course_name.addItems(courses)
+        layout.addWidget(self.course_name)
+
+        self.mobile = QLineEdit()
+        self.mobile.setPlaceholderText("Mobile")
+        layout.addWidget(self.mobile)
+
+        button = QPushButton("Submit")
+        button.clicked.connect(self.add_student)
+        layout.addWidget(button)
+
+        self.setLayout(layout)
+
+    def add_student(self):
+        name = self.student_name.text()
+        course = self.course_name.itemText(self.course_name.currentIndex())
+        mobile = self.mobile.text()
+        connection = DbConnection().connect()
+        cursor = connection.cursor()
+        cursor.execute(
+            "INSERT INTO students (name, course, mobile) VALUES (?, ?, ?)",
+            (name, course, mobile)
+        )
+        connection.commit()
+        cursor.close()
+        connection.close()
+        self.close()
+        mgmt_dashboard.load_data()
+
+
+class SearchDialog(QDialog):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Search Student")
+        self.setFixedWidth(300)
+        self.setFixedHeight(300)
+
+        layout = QVBoxLayout()
+        self.student_name = QLineEdit()
+        self.student_name.setPlaceholderText("Name")
+        layout.addWidget(self.student_name)
+
+        button = QPushButton("Search")
+        button.clicked.connect(self.search)
+        layout.addWidget(button)
+
+        self.setLayout(layout)
+
+    def search(self):
+        name = self.student_name.text()
+        connection = DbConnection().connect()
+        cursor = connection.cursor()
+        result = cursor.execute("SELECT * FROM students WHERE name LIKE ?;",
+                                ('%' + name + '%',))
+        rows = result.fetchall()
+
+        mgmt_dashboard.table.setRowCount(0)  # Clear the table
+        for row_number, row_data in enumerate(rows):
+            mgmt_dashboard.table.insertRow(row_number)
+            for column_number, data in enumerate(row_data):
+                mgmt_dashboard.table.setItem(row_number, column_number, QTableWidgetItem(str(data)))
+
+        cursor.close()
+        connection.close()
 
 
 class EditDialog(QDialog):
@@ -146,7 +235,7 @@ class EditDialog(QDialog):
         self.setLayout(layout)
 
     def update_student(self):
-        connection = sqlite3.connect("database.db")
+        connection = DbConnection().connect()
         cursor = connection.cursor()
         cursor.execute("UPDATE students SET name = ?, course = ?, mobile = ? WHERE id = ?;",
                        (self.student_name.text(),
@@ -158,6 +247,7 @@ class EditDialog(QDialog):
         connection.close()
         self.close()
         mgmt_dashboard.load_data()
+
 
 class DeleteDialog(QDialog):
     def __init__(self):
@@ -180,7 +270,7 @@ class DeleteDialog(QDialog):
     def delete_student(self):
         index = mgmt_dashboard.table.currentRow()
         student_id = mgmt_dashboard.table.item(index, 0).text()
-        connection = sqlite3.connect("database.db")
+        connection = DbConnection().connect()
         cursor = connection.cursor()
         cursor.execute("DELETE from students WHERE id = ?", (student_id,))
         connection.commit()
@@ -195,87 +285,6 @@ class DeleteDialog(QDialog):
         confirmation_widget.exec()
 
 
-class InsertDialog(QDialog):
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("Insert Student Data")
-        self.setFixedWidth(300)
-        self.setFixedHeight(300)
-
-        layout = QVBoxLayout()
-
-        self.student_name = QLineEdit()
-        self.student_name.setPlaceholderText("Name")
-        layout.addWidget(self.student_name)
-
-        self.course_name = QComboBox()
-        courses = ["Biology", "Math", "Astronomy", "Physics"]
-        self.course_name.addItems(courses)
-        layout.addWidget(self.course_name)
-
-        self.mobile = QLineEdit()
-        self.mobile.setPlaceholderText("Mobile")
-        layout.addWidget(self.mobile)
-
-        button = QPushButton("Submit")
-        button.clicked.connect(self.add_student)
-        layout.addWidget(button)
-
-        self.setLayout(layout)
-
-    def add_student(self):
-        name = self.student_name.text()
-        course = self.course_name.itemText(self.course_name.currentIndex())
-        mobile = self.mobile.text()
-        connection = sqlite3.connect("database.db")
-        cursor = connection.cursor()
-        cursor.execute(
-            "INSERT INTO students (name, course, mobile) VALUES (?, ?, ?)",
-            (name, course, mobile)
-        )
-        connection.commit()
-        cursor.close()
-        connection.close()
-        self.close()
-        mgmt_dashboard.load_data()
-
-
-class SearchDialog(QDialog):
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("Search Student")
-        self.setFixedWidth(300)
-        self.setFixedHeight(300)
-
-        layout = QVBoxLayout()
-        self.student_name = QLineEdit()
-        self.student_name.setPlaceholderText("Name")
-        layout.addWidget(self.student_name)
-
-        button = QPushButton("Search")
-        button.clicked.connect(self.search)
-        layout.addWidget(button)
-
-        self.setLayout(layout)
-
-    def search(self):
-        name = self.student_name.text()
-        connection = sqlite3.connect("database.db")
-        cursor = connection.cursor()
-        result = cursor.execute("SELECT * FROM students WHERE name LIKE ?;",
-                                ('%' + name + '%',))
-        rows = result.fetchall()
-
-        mgmt_dashboard.table.setRowCount(0)  # Clear the table
-        for row_number, row_data in enumerate(rows):
-            mgmt_dashboard.table.insertRow(row_number)
-            for column_number, data in enumerate(row_data):
-                mgmt_dashboard.table.setItem(row_number, column_number, QTableWidgetItem(str(data)))
-
-        cursor.close()
-        connection.close()
-
-
 class AboutDialog(QMessageBox):
     def __init__(self):
         super().__init__()
@@ -287,6 +296,7 @@ class AboutDialog(QMessageBox):
         The possibilities are limitless. Expansion to come.
         """
         self.setText(content)
+
 
 app = QApplication(sys.argv)
 mgmt_dashboard = MainWindow()
